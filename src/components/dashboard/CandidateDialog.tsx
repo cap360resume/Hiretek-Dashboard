@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Loader2, X } from "lucide-react";
 import { z } from "zod";
 
-const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected"];
+const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3"];
 
 const candidateSchema = z.object({
   full_name: z.string().trim().min(1, "Name is required").max(100, "Name too long"),
@@ -19,7 +19,7 @@ const candidateSchema = z.object({
   phone: z.string().trim().min(1, "Phone is required").max(20, "Phone too long"),
   gender: z.string().optional(),
   city: z.string().trim().min(1, "City is required").max(100, "City too long"),
-  stage: z.enum(["Screening", "Interview", "Offer", "Hired", "Rejected"]),
+  stage: z.enum(["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3"]),
   notes: z.string().max(1000, "Notes too long").optional(),
   designation: z.string().max(100, "Designation too long").optional(),
   company: z.string().max(100, "Company too long").optional(),

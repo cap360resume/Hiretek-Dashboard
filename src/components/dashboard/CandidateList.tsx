@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Download, Edit, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import CandidateDialog from "./CandidateDialog";
@@ -41,7 +42,7 @@ interface CandidateListProps {
   isSuperAdmin: boolean;
 }
 
-const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected"];
+const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3"];
 
 const STAGE_VARIANTS: Record<string, string> = {
   Screening: "bg-screening/10 text-screening border-screening",
@@ -49,6 +50,13 @@ const STAGE_VARIANTS: Record<string, string> = {
   Offer: "bg-offer/10 text-offer border-offer",
   Hired: "bg-hired/10 text-hired border-hired",
   Rejected: "bg-rejected/10 text-rejected border-rejected",
+  Backout: "bg-destructive/10 text-destructive border-destructive",
+  "On Hold": "bg-warning/10 text-warning border-warning",
+  "Not Interested": "bg-muted text-muted-foreground border-muted",
+  Duplicate: "bg-muted text-muted-foreground border-muted",
+  "Round 1": "bg-primary/10 text-primary border-primary",
+  "Round 2": "bg-primary/10 text-primary border-primary",
+  "Round 3": "bg-primary/10 text-primary border-primary",
 };
 
 export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
@@ -62,6 +70,8 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
   const [subAdmins, setSubAdmins] = useState<Array<{ id: string; name: string }>>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
+  const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
+  const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadCandidates();
@@ -354,7 +364,11 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => window.open(candidate.resume_url!, "_blank")}
+                            onClick={() => {
+                              setSelectedResumeUrl(candidate.resume_url);
+                              setResumeDialogOpen(true);
+                            }}
+                            title="View Resume"
                           >
                             <FileText className="h-4 w-4" />
                           </Button>
@@ -395,6 +409,40 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
           setEditingCandidate(null);
         }}
       />
+
+      <Dialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Resume Preview</DialogTitle>
+            <DialogDescription>
+              View or download the candidate's resume
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {selectedResumeUrl && (
+              <iframe
+                src={selectedResumeUrl}
+                className="w-full h-[600px] border rounded"
+                title="Resume Preview"
+              />
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (selectedResumeUrl) {
+                  window.open(selectedResumeUrl, "_blank");
+                }
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+            <Button onClick={() => setResumeDialogOpen(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
