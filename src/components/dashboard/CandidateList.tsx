@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Download, Edit, Trash2, FileText } from "lucide-react";
+import { Plus, Search, Download, Edit, Trash2, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import CandidateDialog from "./CandidateDialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +31,10 @@ interface Candidate {
   resume_url: string | null;
   stage: string;
   notes: string | null;
+  position_name: string | null;
+  client_name: string | null;
+  qualification: string | null;
+  industry: string | null;
   created_at: string;
   created_by: string;
   profiles?: {
@@ -72,6 +76,30 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null);
+  const [downloadingResume, setDownloadingResume] = useState(false);
+
+  const handleDownloadResume = async (url: string, candidateName: string) => {
+    setDownloadingResume(true);
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const extension = url.split('.').pop() || 'pdf';
+      link.download = `${candidateName.replace(/\s+/g, '_')}_Resume.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success("Resume downloaded successfully");
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error("Failed to download resume");
+    } finally {
+      setDownloadingResume(false);
+    }
+  };
 
   useEffect(() => {
     loadCandidates();
@@ -186,7 +214,8 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
     const headers = [
       "Name", "Email", "Phone", "Gender", "City", "Designation", "Company", 
       "Experience", "Current CTC", "Expected CTC", "Notice Period", 
-      "Date of Sharing", "Comment", "Stage", "Created At"
+      "Date of Sharing", "Comment", "Notes", "Position Name", "Client Name", 
+      "Qualification", "Industry", "Stage", "Created At"
     ];
     
     const rows = filteredCandidates.map((c) => [
@@ -203,6 +232,11 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
       c.notice_period || "",
       c.date_of_sharing ? new Date(c.date_of_sharing).toLocaleDateString() : "",
       c.comment || "",
+      c.notes || "",
+      c.position_name || "",
+      c.client_name || "",
+      c.qualification || "",
+      c.industry || "",
       c.stage,
       new Date(c.created_at).toLocaleDateString(),
     ]);
@@ -305,6 +339,10 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
+                  <TableHead>Position Name</TableHead>
+                  <TableHead>Client Name</TableHead>
+                  <TableHead>Qualification</TableHead>
+                  <TableHead>Industry</TableHead>
                   <TableHead>Designation</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Experience</TableHead>
@@ -314,6 +352,7 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                   <TableHead>City</TableHead>
                   <TableHead>Date of Sharing</TableHead>
                   <TableHead>Comment</TableHead>
+                  <TableHead>Notes</TableHead>
                   <TableHead>Stage</TableHead>
                   {isSuperAdmin && <TableHead>Added By</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
@@ -329,6 +368,10 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                         <div className="text-muted-foreground">{candidate.phone}</div>
                       </div>
                     </TableCell>
+                    <TableCell className="whitespace-nowrap">{candidate.position_name || "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{candidate.client_name || "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{candidate.qualification || "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{candidate.industry || "-"}</TableCell>
                     <TableCell className="whitespace-nowrap">{candidate.designation || "-"}</TableCell>
                     <TableCell className="whitespace-nowrap">{candidate.company || "-"}</TableCell>
                     <TableCell className="whitespace-nowrap">{candidate.experience || "-"}</TableCell>
@@ -341,9 +384,14 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                         ? new Date(candidate.date_of_sharing).toLocaleDateString() 
                         : "-"}
                     </TableCell>
-                    <TableCell className="max-w-[200px]">
-                      <div className="text-sm truncate" title={candidate.comment || ""}>
+                    <TableCell className="max-w-[300px]">
+                      <div className="text-sm whitespace-normal break-words">
                         {candidate.comment || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-[300px]">
+                      <div className="text-sm whitespace-normal break-words">
+                        {candidate.notes || "-"}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -361,17 +409,28 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {candidate.resume_url && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedResumeUrl(candidate.resume_url);
-                              setResumeDialogOpen(true);
-                            }}
-                            title="View Resume"
-                          >
-                            <FileText className="h-4 w-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedResumeUrl(candidate.resume_url);
+                                setResumeDialogOpen(true);
+                              }}
+                              title="View Resume"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownloadResume(candidate.resume_url!, candidate.full_name)}
+                              disabled={downloadingResume}
+                              title="Download Resume"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                         <Button
                           variant="ghost"
@@ -411,35 +470,50 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
       />
 
       <Dialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Resume Preview</DialogTitle>
+            <DialogTitle>Download Resume</DialogTitle>
             <DialogDescription>
-              View or download the candidate's resume
+              Click the button below to download the candidate's resume
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-auto">
-            {selectedResumeUrl && (
-              <iframe
-                src={selectedResumeUrl}
-                className="w-full h-[600px] border rounded"
-                title="Resume Preview"
-              />
-            )}
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <FileText className="h-16 w-16 text-primary" />
+            <p className="text-sm text-muted-foreground text-center">
+              {selectedResumeUrl && filteredCandidates.find(c => c.resume_url === selectedResumeUrl)?.full_name}'s Resume
+            </p>
           </div>
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-2">
             <Button
               variant="outline"
+              onClick={() => setResumeDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
               onClick={() => {
                 if (selectedResumeUrl) {
-                  window.open(selectedResumeUrl, "_blank");
+                  const candidate = filteredCandidates.find(c => c.resume_url === selectedResumeUrl);
+                  if (candidate) {
+                    handleDownloadResume(selectedResumeUrl, candidate.full_name);
+                    setResumeDialogOpen(false);
+                  }
                 }
               }}
+              disabled={downloadingResume}
             >
-              <Download className="h-4 w-4 mr-2" />
-              Download
+              {downloadingResume ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Resume
+                </>
+              )}
             </Button>
-            <Button onClick={() => setResumeDialogOpen(false)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>

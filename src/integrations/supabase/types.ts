@@ -17,6 +17,7 @@ export type Database = {
       candidates: {
         Row: {
           city: string
+          client_name: string | null
           comment: string | null
           company: string | null
           created_at: string
@@ -30,15 +31,19 @@ export type Database = {
           full_name: string
           gender: string | null
           id: string
+          industry: string | null
           notes: string | null
           notice_period: string | null
           phone: string
+          position_name: string | null
+          qualification: string | null
           resume_url: string | null
           stage: Database["public"]["Enums"]["candidate_stage"]
           updated_at: string
         }
         Insert: {
           city: string
+          client_name?: string | null
           comment?: string | null
           company?: string | null
           created_at?: string
@@ -52,15 +57,19 @@ export type Database = {
           full_name: string
           gender?: string | null
           id?: string
+          industry?: string | null
           notes?: string | null
           notice_period?: string | null
           phone: string
+          position_name?: string | null
+          qualification?: string | null
           resume_url?: string | null
           stage?: Database["public"]["Enums"]["candidate_stage"]
           updated_at?: string
         }
         Update: {
           city?: string
+          client_name?: string | null
           comment?: string | null
           company?: string | null
           created_at?: string
@@ -74,9 +83,12 @@ export type Database = {
           full_name?: string
           gender?: string | null
           id?: string
+          industry?: string | null
           notes?: string | null
           notice_period?: string | null
           phone?: string
+          position_name?: string | null
+          qualification?: string | null
           resume_url?: string | null
           stage?: Database["public"]["Enums"]["candidate_stage"]
           updated_at?: string
@@ -140,10 +152,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_super_admin: {
-        Args: { _user_id: string }
-        Returns: boolean
-      }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "super_admin" | "sub_admin"
@@ -288,7 +297,20 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "sub_admin"],
-      candidate_stage: ["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3"] 
+      candidate_stage: [
+        "Screening",
+        "Interview",
+        "Offer",
+        "Hired",
+        "Rejected",
+        "Backout",
+        "On Hold",
+        "Not Interested",
+        "Duplicate",
+        "Round 1",
+        "Round 2",
+        "Round 3",
+      ],
     },
   },
 } as const

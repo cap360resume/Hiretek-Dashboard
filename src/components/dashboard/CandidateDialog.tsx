@@ -28,6 +28,10 @@ const candidateSchema = z.object({
   expected_ctc: z.string().max(50, "Expected CTC too long").optional(),
   notice_period: z.string().max(50, "Notice period too long").optional(),
   comment: z.string().max(1000, "Comment too long").optional(),
+  position_name: z.string().max(100, "Position name too long").optional(),
+  client_name: z.string().max(100, "Client name too long").optional(),
+  qualification: z.string().max(100, "Qualification too long").optional(),
+  industry: z.string().max(100, "Industry too long").optional(),
 });
 
 interface CandidateDialogProps {
@@ -60,6 +64,10 @@ export default function CandidateDialog({
     expected_ctc: "",
     notice_period: "",
     comment: "",
+    position_name: "",
+    client_name: "",
+    qualification: "",
+    industry: "",
   });
   const [dateOfSharing, setDateOfSharing] = useState<string>("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -81,6 +89,10 @@ export default function CandidateDialog({
         expected_ctc: candidate.expected_ctc || "",
         notice_period: candidate.notice_period || "",
         comment: candidate.comment || "",
+        position_name: candidate.position_name || "",
+        client_name: candidate.client_name || "",
+        qualification: candidate.qualification || "",
+        industry: candidate.industry || "",
       });
       setDateOfSharing(candidate.date_of_sharing || "");
     } else {
@@ -99,6 +111,10 @@ export default function CandidateDialog({
         expected_ctc: "",
         notice_period: "",
         comment: "",
+        position_name: "",
+        client_name: "",
+        qualification: "",
+        industry: "",
       });
       setDateOfSharing("");
     }
@@ -149,6 +165,10 @@ export default function CandidateDialog({
         expected_ctc: validatedData.expected_ctc,
         notice_period: validatedData.notice_period,
         comment: validatedData.comment,
+        position_name: validatedData.position_name,
+        client_name: validatedData.client_name,
+        qualification: validatedData.qualification,
+        industry: validatedData.industry,
         date_of_sharing: dateOfSharing || null,
         resume_url: resumeUrl,
         created_by: user.id,
@@ -283,11 +303,53 @@ export default function CandidateDialog({
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="position_name">Position Name</Label>
+              <Input
+                id="position_name"
+                value={formData.position_name}
+                onChange={(e) => setFormData({ ...formData, position_name: e.target.value })}
+                maxLength={100}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="company">Company</Label>
               <Input
                 id="company"
                 value={formData.company}
                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                maxLength={100}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="client_name">Client Name</Label>
+              <Input
+                id="client_name"
+                value={formData.client_name}
+                onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
+                maxLength={100}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="qualification">Qualification</Label>
+              <Input
+                id="qualification"
+                value={formData.qualification}
+                onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+                placeholder="e.g., B.Tech, MBA"
+                maxLength={100}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="industry">Industry</Label>
+              <Input
+                id="industry"
+                value={formData.industry}
+                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                placeholder="e.g., IT, Finance"
                 maxLength={100}
               />
             </div>
