@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
+  "rootDirectory": "Hiretek-Dashboard",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ]

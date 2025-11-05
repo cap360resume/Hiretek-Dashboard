@@ -339,9 +339,9 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
-                  <TableHead>Position Name</TableHead>
+                  {/* <TableHead>Position Name</TableHead>
                   <TableHead>Client Name</TableHead>
-                  <TableHead>Qualification</TableHead>
+                  <TableHead>Qualification</TableHead> */}
                   <TableHead>Industry</TableHead>
                   <TableHead>Designation</TableHead>
                   <TableHead>Company</TableHead>
