@@ -1,5 +1,9 @@
 {
-  "rewrites":[
-    {"source": "/(.*)", "destination": "/"}
+  "builds": [
+    { "src": "dist/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/assets/(.*)", "dest": "/dist/assets/$1" },
+    { "src": "/(.*)", "dest": "/dist/index.html" }
   ]
 }
