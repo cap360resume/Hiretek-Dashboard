@@ -3,9 +3,8 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: "./", // ✅ This fixes 404 issues for JS & CSS in production
+  base: "./", // ✅ ensures correct relative paths when hosted under www.maveninfos.com
   server: {
     host: "::",
     port: 8080,
@@ -15,8 +14,5 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-  },
-  build: {
-    outDir: "dist", // ✅ Ensures output goes to dist folder (Vercel expects this)
   },
 }));
