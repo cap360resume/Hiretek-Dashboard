@@ -129,9 +129,7 @@ export default function CandidateDialog({
 
     try {
       const validatedData = candidateSchema.parse(formData);
-
       let resumeUrl = candidate?.resume_url || null;
-
       // Upload resume if provided
       if (resumeFile) {
         const fileExt = resumeFile.name.split(".").pop();
