@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Download, Edit, Trash2, FileText, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Download, Edit, Trash2, FileText, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import CandidateDialog from "./CandidateDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import * as XLSX from 'xlsx';
 
 interface Candidate {
   id: string;
@@ -77,6 +79,8 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null);
   const [downloadingResume, setDownloadingResume] = useState(false);
+  const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
 
   const handleDownloadResume = async (url: string, candidateName: string) => {
     setDownloadingResume(true);
@@ -179,7 +183,9 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
           c.full_name.toLowerCase().includes(term) ||
           c.email.toLowerCase().includes(term) ||
           c.phone.includes(term) ||
-          c.city.toLowerCase().includes(term)
+          c.city.toLowerCase().includes(term) ||
+          (c.position_name && c.position_name.toLowerCase().includes(term)) ||
+          (c.client_name && c.client_name.toLowerCase().includes(term))
       );
     }
 
@@ -210,51 +216,139 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
     }
   };
 
-  const exportToCSV = () => {
-    const headers = [
-      "Name", "Email", "Phone", "Gender", "City", "Designation", "Company", 
-      "Experience", "Current CTC", "Expected CTC", "Notice Period", 
-      "Date of Sharing", "Comment", "Notes", "Position Name", "Client Name", 
-      "Qualification", "Industry", "Stage", "Created At"
-    ];
-    
-    const rows = filteredCandidates.map((c) => [
-      c.full_name,
-      c.email,
-      c.phone,
-      c.gender || "",
-      c.city,
-      c.designation || "",
-      c.company || "",
-      c.experience || "",
-      c.current_ctc || "",
-      c.expected_ctc || "",
-      c.notice_period || "",
-      c.date_of_sharing ? new Date(c.date_of_sharing).toLocaleDateString() : "",
-      c.comment || "",
-      c.notes || "",
-      c.position_name || "",
-      c.client_name || "",
-      c.qualification || "",
-      c.industry || "",
-      c.stage,
-      new Date(c.created_at).toLocaleDateString(),
-    ]);
-
-    if (isSuperAdmin) {
-      headers.push("Added By");
-      rows.forEach((row, index) => {
-        row.push(filteredCandidates[index].profiles?.full_name || "Unknown");
-      });
+  const handleDeleteSelected = async () => {
+    if (selectedCandidates.size === 0) {
+      toast.error("No candidates selected");
+      return;
     }
 
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `candidates-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
+    if (!confirm(`Are you sure you want to delete ${selectedCandidates.size} candidate(s)?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from("candidates")
+        .delete()
+        .in("id", Array.from(selectedCandidates));
+
+      if (error) throw error;
+
+      toast.success(`Deleted ${selectedCandidates.size} candidate(s) successfully`);
+      setSelectedCandidates(new Set());
+      loadCandidates();
+    } catch (error) {
+      console.error("Error deleting candidates:", error);
+      toast.error("Failed to delete candidates");
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedCandidates(new Set(filteredCandidates.map(c => c.id)));
+    } else {
+      setSelectedCandidates(new Set());
+    }
+  };
+
+  const handleSelectCandidate = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedCandidates);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedCandidates(newSelected);
+  };
+
+  const exportToExcel = () => {
+    const candidatesToExport = selectedCandidates.size > 0
+      ? filteredCandidates.filter(c => selectedCandidates.has(c.id))
+      : filteredCandidates;
+
+    if (candidatesToExport.length === 0) {
+      toast.error("No candidates to export");
+      return;
+    }
+
+    const data = candidatesToExport.map((c) => ({
+      "Name": c.full_name,
+      "Email": c.email,
+      "Phone": c.phone,
+      "Gender": c.gender || "",
+      "City": c.city,
+      "Designation": c.designation || "",
+      "Company": c.company || "",
+      "Experience": c.experience || "",
+      "Current CTC": c.current_ctc || "",
+      "Expected CTC": c.expected_ctc || "",
+      "Notice Period": c.notice_period || "",
+      "Date of Sharing": c.date_of_sharing ? new Date(c.date_of_sharing).toLocaleDateString() : "",
+      "Comment": c.comment || "",
+      "Notes": c.notes || "",
+      "Position Name": c.position_name || "",
+      "Client Name": c.client_name || "",
+      "Qualification": c.qualification || "",
+      "Industry": c.industry || "",
+      "Stage": c.stage,
+      "Created At": new Date(c.created_at).toLocaleDateString(),
+      ...(isSuperAdmin ? { "Added By": c.profiles?.full_name || "Unknown" } : {})
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Candidates");
+    XLSX.writeFile(wb, `candidates-${new Date().toISOString().split("T")[0]}.xlsx`);
+    
+    toast.success(`Exported ${candidatesToExport.length} candidate(s)`);
+    setSelectedCandidates(new Set());
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      const candidates = jsonData.map((row: any) => ({
+        full_name: row["Name"] || "",
+        email: row["Email"] || "",
+        phone: row["Phone"] || "",
+        gender: row["Gender"] || null,
+        city: row["City"] || "",
+        designation: row["Designation"] || null,
+        company: row["Company"] || null,
+        experience: row["Experience"] || null,
+        current_ctc: row["Current CTC"] || null,
+        expected_ctc: row["Expected CTC"] || null,
+        notice_period: row["Notice Period"] || null,
+        date_of_sharing: row["Date of Sharing"] ? new Date(row["Date of Sharing"]).toISOString().split("T")[0] : null,
+        comment: row["Comment"] || null,
+        notes: row["Notes"] || null,
+        position_name: row["Position Name"] || null,
+        client_name: row["Client Name"] || null,
+        qualification: row["Qualification"] || null,
+        industry: row["Industry"] || null,
+        stage: row["Stage"] || "Screening",
+        created_by: user.id
+      }));
+
+      const { error } = await supabase.from("candidates").insert(candidates);
+
+      if (error) throw error;
+
+      toast.success(`Successfully imported ${candidates.length} candidate(s)`);
+      loadCandidates();
+      e.target.value = "";
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error("Failed to import candidates. Please check the file format.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -268,9 +362,28 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button onClick={exportToCSV} variant="outline" size="sm">
+            {selectedCandidates.size > 0 && (
+              <Button onClick={handleDeleteSelected} variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete ({selectedCandidates.size})
+              </Button>
+            )}
+            <Button onClick={exportToExcel} variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
-              Export
+              Export {selectedCandidates.size > 0 ? `(${selectedCandidates.size})` : "All"}
+            </Button>
+            <Button variant="outline" size="sm" asChild disabled={importing}>
+              <label className="cursor-pointer">
+                <Upload className="h-4 w-4 mr-2" />
+                {importing ? "Importing..." : "Import"}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImportExcel}
+                  className="hidden"
+                  disabled={importing}
+                />
+              </label>
             </Button>
             <Button onClick={() => { setEditingCandidate(null); setDialogOpen(true); }} size="sm">
               <Plus className="h-4 w-4 mr-2" />
@@ -284,7 +397,7 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, email, phone, or city..."
+              placeholder="Search by name, email, phone, city, position, or client..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
@@ -337,6 +450,12 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={selectedCandidates.size === filteredCandidates.length && filteredCandidates.length > 0}
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Position Name</TableHead>
@@ -361,6 +480,12 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
               <TableBody>
                 {filteredCandidates.map((candidate) => (
                   <TableRow key={candidate.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedCandidates.has(candidate.id)}
+                        onCheckedChange={(checked) => handleSelectCandidate(candidate.id, checked as boolean)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium whitespace-nowrap">{candidate.full_name}</TableCell>
                     <TableCell className="min-w-[180px]">
                       <div className="text-sm">
