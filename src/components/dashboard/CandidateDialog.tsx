@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Loader2, X } from "lucide-react";
 import { z } from "zod";
 
-const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3"];
+const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3", "CV Shared", "Joined", "Offer Pending", "CV Not Relevant"];
 
 const candidateSchema = z.object({
   full_name: z.string().trim().min(1, "Name is required").max(100, "Name too long"),
@@ -19,7 +19,7 @@ const candidateSchema = z.object({
   phone: z.string().trim().min(1, "Phone is required").max(20, "Phone too long"),
   gender: z.string().optional(),
   city: z.string().trim().min(1, "City is required").max(100, "City too long"),
-  stage: z.enum(["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3"]),
+  stage: z.enum(["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3", "CV Shared", "Joined", "Offer Pending", "CV Not Relevant"]),
   notes: z.string().max(1000, "Notes too long").optional(),
   designation: z.string().max(100, "Designation too long").optional(),
   company: z.string().max(100, "Company too long").optional(),
@@ -129,7 +129,9 @@ export default function CandidateDialog({
 
     try {
       const validatedData = candidateSchema.parse(formData);
+
       let resumeUrl = candidate?.resume_url || null;
+
       // Upload resume if provided
       if (resumeFile) {
         const fileExt = resumeFile.name.split(".").pop();
@@ -146,6 +148,22 @@ export default function CandidateDialog({
           .getPublicUrl(fileName);
 
         resumeUrl = urlData.publicUrl;
+        
+        // Check for duplicate resume
+        const { data: existingCandidates, error: checkError } = await supabase
+          .from("candidates")
+          .select("id, full_name, email")
+          .eq("resume_url", resumeUrl)
+          .neq("id", candidate?.id || "");
+        
+        if (checkError) {
+          console.error("Error checking for duplicates:", checkError);
+        }
+        
+        if (existingCandidates && existingCandidates.length > 0) {
+          const duplicate = existingCandidates[0];
+          toast.warning(`Resume already exists for candidate: ${duplicate.full_name} (${duplicate.email})`);
+        }
       }
 
       const candidateData = {
