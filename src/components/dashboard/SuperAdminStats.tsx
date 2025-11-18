@@ -282,8 +282,15 @@ export default function SuperAdminStats() {
                       <Cell key={`cell-${index}`} fill={STAGE_COLORS[entry.name as keyof typeof STAGE_COLORS]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  {/* <Tooltip />
                   <Legend />
+                  <Legend 
+                    formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
+                  /> */}/
+                  <Tooltip />
+                  <Legend 
+                   formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
+                   />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

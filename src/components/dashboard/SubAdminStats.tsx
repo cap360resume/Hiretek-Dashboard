@@ -238,8 +238,10 @@ export default function SubAdminStats() {
                     <Cell key={`cell-${index}`} fill={STAGE_COLORS[entry.name as keyof typeof STAGE_COLORS]} />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                 <Tooltip />
+                  <Legend 
+                   formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
+                   />
               </PieChart>
             </ResponsiveContainer>
           ) : (
