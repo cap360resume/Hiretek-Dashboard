@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +50,8 @@ export default function CandidateDialog({
 }: CandidateDialogProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -71,6 +74,26 @@ export default function CandidateDialog({
   });
   const [dateOfSharing, setDateOfSharing] = useState<string>("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+
+  const DRAFT_KEY = "candidate_form_draft";
+
+  // Load draft from localStorage
+  useEffect(() => {
+    if (open && !candidate) {
+      const draft = localStorage.getItem(DRAFT_KEY);
+      if (draft) {
+        try {
+          const parsedDraft = JSON.parse(draft);
+          setFormData(parsedDraft.formData);
+          setDateOfSharing(parsedDraft.dateOfSharing || "");
+          toast.info("Draft loaded");
+          setHasUnsavedChanges(true);
+        } catch (e) {
+          console.error("Failed to load draft:", e);
+        }
+      }
+    }
+  }, [open, candidate]);
 
   useEffect(() => {
     if (candidate) {
@@ -95,7 +118,8 @@ export default function CandidateDialog({
         industry: candidate.industry || "",
       });
       setDateOfSharing(candidate.date_of_sharing || "");
-    } else {
+      setHasUnsavedChanges(false);
+    } else if (!open) {
       setFormData({
         full_name: "",
         email: "",
@@ -117,9 +141,39 @@ export default function CandidateDialog({
         industry: "",
       });
       setDateOfSharing("");
+      setHasUnsavedChanges(false);
     }
     setResumeFile(null);
   }, [candidate, open]);
+
+  // Save draft to localStorage whenever form data changes
+  useEffect(() => {
+    if (open && !candidate && formData.full_name) {
+      const draft = {
+        formData,
+        dateOfSharing,
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setHasUnsavedChanges(true);
+    }
+  }, [formData, dateOfSharing, open, candidate]);
+
+  const handleCloseAttempt = () => {
+    if (hasUnsavedChanges && !candidate) {
+      setShowCloseConfirm(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  const handleConfirmClose = (saveData: boolean) => {
+    if (!saveData) {
+      localStorage.removeItem(DRAFT_KEY);
+      setHasUnsavedChanges(false);
+    }
+    setShowCloseConfirm(false);
+    onOpenChange(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,6 +220,34 @@ export default function CandidateDialog({
         }
       }
 
+      // Check for duplicate email
+      const { data: emailDuplicates } = await supabase
+        .from("candidates")
+        .select("id, full_name, email")
+        .eq("email", validatedData.email)
+        .neq("id", candidate?.id || "");
+      
+      if (emailDuplicates && emailDuplicates.length > 0) {
+        const duplicate = emailDuplicates[0];
+        toast.error(`Email already exists for candidate: ${duplicate.full_name} (${duplicate.email})`);
+        setLoading(false);
+        return;
+      }
+
+      // Check for duplicate phone
+      const { data: phoneDuplicates } = await supabase
+        .from("candidates")
+        .select("id, full_name, phone")
+        .eq("phone", validatedData.phone)
+        .neq("id", candidate?.id || "");
+      
+      if (phoneDuplicates && phoneDuplicates.length > 0) {
+        const duplicate = phoneDuplicates[0];
+        toast.error(`Phone number already exists for candidate: ${duplicate.full_name} (${duplicate.phone})`);
+        setLoading(false);
+        return;
+      }
+
       const candidateData = {
         full_name: validatedData.full_name,
         email: validatedData.email,
@@ -203,6 +285,9 @@ export default function CandidateDialog({
 
         if (error) throw error;
         toast.success("Candidate added successfully");
+        // Clear draft after successful submission
+        localStorage.removeItem(DRAFT_KEY);
+        setHasUnsavedChanges(false);
       }
 
       onSuccess();
@@ -219,8 +304,15 @@ export default function CandidateDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <>
+      <Dialog open={open} onOpenChange={handleCloseAttempt}>
+        <DialogContent 
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => {
+            e.preventDefault();
+            handleCloseAttempt();
+          }}
+        >
         <DialogHeader>
           <DialogTitle>{candidate ? "Edit Candidate" : "Add New Candidate"}</DialogTitle>
           <DialogDescription>
@@ -474,7 +566,7 @@ export default function CandidateDialog({
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={handleCloseAttempt}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
@@ -485,5 +577,25 @@ export default function CandidateDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have unsaved changes. Would you like to save them as a draft or discard them?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => handleConfirmClose(false)}>
+            Discard
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={() => handleConfirmClose(true)}>
+            Save Draft
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
