@@ -1,21 +1,29 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, UserCheck, Clock, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Users, TrendingUp, UserCheck, Clock, ArrowUpRight, ArrowDownRight, Trophy } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 
-const STAGE_COLORS = {
-  Screening: "hsl(var(--screening))",
-  Interview: "hsl(var(--interview))",
-  Offer: "hsl(var(--offer))",
-  Hired: "hsl(var(--hired))",
-  Rejected: "hsl(var(--rejected))",
-  "Round 1": "hsl(45, 93%, 47%)", // yellow
-  "Round 2": "hsl(120, 60%, 50%)", // green
-  "CV Shared": "hsl(174, 72%, 56%)", // sea green
-  "Offer Pending": "hsl(25, 95%, 53%)", // orange
+const STAGE_COLORS: Record<string, string> = {
+  Screening: "hsl(200, 70%, 50%)",
+  Interview: "hsl(280, 60%, 55%)",
+  Offer: "hsl(140, 60%, 45%)",
+  Hired: "hsl(160, 70%, 40%)",
+  Rejected: "hsl(0, 70%, 50%)",
+  Backout: "hsl(30, 80%, 50%)",
+  "On Hold": "hsl(45, 80%, 50%)",
+  "Not Interested": "hsl(0, 40%, 55%)",
+  Duplicate: "hsl(200, 30%, 50%)",
+  "Round 1": "hsl(45, 93%, 47%)",
+  "Round 2": "hsl(120, 60%, 50%)",
+  "Round 3": "hsl(180, 60%, 45%)",
+  "CV Shared": "hsl(174, 72%, 56%)",
+  Joined: "hsl(150, 70%, 40%)",
+  "Offer Pending": "hsl(25, 95%, 53%)",
+  "CV Not Relevant": "hsl(0, 30%, 60%)",
 };
 
 export default function SuperAdminStats() {
@@ -98,9 +106,6 @@ export default function SuperAdminStats() {
         .lt("created_at", startOfWeek.toISOString());
 
       // Previous month admin count
-      const endOfPrevMonth = new Date(startOfMonth);
-      endOfPrevMonth.setMilliseconds(-1);
-
       const { count: prevAdmins } = await supabase
         .from("user_roles")
         .select("*", { count: "exact", head: true })
@@ -139,28 +144,45 @@ export default function SuperAdminStats() {
         });
 
         setStageData(
-          Object.entries(stageCounts).map(([name, value]) => ({ name, value }))
+          Object.entries(stageCounts)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
         );
       }
 
-      // Admin performance
-      const { data: adminData } = await supabase
+      // Admin performance - fetch separately and join manually
+      const { data: candidatesWithCreator } = await supabase
         .from("candidates")
-        .select("created_by, profiles(full_name)");
+        .select("created_by");
 
-      if (adminData) {
+      if (candidatesWithCreator) {
+        // Count candidates per admin
         const adminCounts: Record<string, number> = {};
-        adminData.forEach((item) => {
-          const adminName = (item.profiles as any)?.full_name || "Unknown";
-          adminCounts[adminName] = (adminCounts[adminName] || 0) + 1;
+        candidatesWithCreator.forEach((c) => {
+          adminCounts[c.created_by] = (adminCounts[c.created_by] || 0) + 1;
         });
 
-        setAdminPerformance(
-          Object.entries(adminCounts)
-            .map(([name, candidates]) => ({ name, candidates }))
-            .sort((a, b) => b.candidates - a.candidates)
-            .slice(0, 5)
-        );
+        // Get profile names for these admins
+        const adminIds = Object.keys(adminCounts);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", adminIds);
+
+        const profileMap: Record<string, string> = {};
+        profiles?.forEach((p) => {
+          profileMap[p.id] = p.full_name || "Unknown";
+        });
+
+        const performanceData = Object.entries(adminCounts)
+          .map(([id, count]) => ({
+            name: profileMap[id] || "Unknown",
+            candidates: count,
+          }))
+          .sort((a, b) => b.candidates - a.candidates)
+          .slice(0, 5);
+
+        setAdminPerformance(performanceData);
       }
     } catch (error) {
       console.error("Error loading stats:", error);
@@ -168,6 +190,8 @@ export default function SuperAdminStats() {
       setLoading(false);
     }
   };
+
+  const totalStageCount = stageData.reduce((acc, item) => acc + item.value, 0);
 
   if (loading) {
     return (
@@ -184,10 +208,12 @@ export default function SuperAdminStats() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border-l-4 border-l-primary">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Candidates</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <div className="rounded-full bg-primary/10 p-2">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
@@ -203,10 +229,12 @@ export default function SuperAdminStats() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Admins</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
+            <div className="rounded-full bg-green-500/10 p-2">
+              <UserCheck className="h-4 w-4 text-green-500" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
@@ -222,10 +250,12 @@ export default function SuperAdminStats() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <div className="rounded-full bg-blue-500/10 p-2">
+              <TrendingUp className="h-4 w-4 text-blue-500" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
@@ -241,10 +271,12 @@ export default function SuperAdminStats() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-orange-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">This Week</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <div className="rounded-full bg-orange-500/10 p-2">
+              <Clock className="h-4 w-4 text-orange-500" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
@@ -263,36 +295,49 @@ export default function SuperAdminStats() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle>Candidates by Stage</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <span>Candidates by Stage</span>
+              <Badge variant="secondary" className="ml-auto font-normal">
+                Total: {totalStageCount}
+              </Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {stageData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={stageData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {stageData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={STAGE_COLORS[entry.name as keyof typeof STAGE_COLORS]} />
-                    ))}
-                  </Pie>
-                  {/* <Tooltip />
-                  <Legend />
-                  <Legend 
-                    formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
-                  /> */}/
-                  <Tooltip />
-                  <Legend 
-                   formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
-                   />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="space-y-3">
+                {stageData.map((stage) => {
+                  const percentage = totalStageCount > 0 
+                    ? Math.round((stage.value / totalStageCount) * 100) 
+                    : 0;
+                  const color = STAGE_COLORS[stage.name] || "hsl(var(--primary))";
+                  
+                  return (
+                    <div key={stage.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="h-3 w-3 rounded-full shrink-0" 
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="font-medium truncate max-w-[150px]">{stage.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <span className="font-semibold text-foreground">{stage.value}</span>
+                          <span className="text-xs w-10 text-right">({percentage}%)</span>
+                        </div>
+                      </div>
+                      <Progress 
+                        value={percentage} 
+                        className="h-2"
+                        style={{ 
+                          background: `${color}20`,
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">
                 No data available
@@ -302,18 +347,38 @@ export default function SuperAdminStats() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Admin Performance (Top 5)</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Admin Performance (Top 5)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {adminPerformance.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={adminPerformance}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="candidates" fill="hsl(var(--primary))" />
+                <BarChart data={adminPerformance} layout="vertical" margin={{ left: 20, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                  <XAxis type="number" />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    width={80}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value: number) => [`${value} candidates`, 'Total']}
+                  />
+                  <Bar 
+                    dataKey="candidates" 
+                    fill="hsl(var(--primary))" 
+                    radius={[0, 4, 4, 0]}
+                    barSize={24}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

@@ -478,14 +478,15 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
+                  <TableHead className="w-[50px] sticky left-0 z-20 bg-background">
                     <Checkbox
                       checked={selectedCandidates.size === filteredCandidates.length && filteredCandidates.length > 0}
                       onCheckedChange={handleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Contact</TableHead>
+                  <TableHead className="sticky left-[50px] z-20 bg-background">Date of Sharing</TableHead>
+                  <TableHead className="sticky left-[150px] z-20 bg-background">Name</TableHead>
+                  <TableHead className="sticky left-[280px] z-20 bg-background min-w-[200px]">Contact</TableHead>
                   <TableHead>Position Name</TableHead>
                   <TableHead>Client Name</TableHead>
                   <TableHead>Qualification</TableHead>
@@ -497,9 +498,8 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                   <TableHead>Expected CTC</TableHead>
                   <TableHead>Notice Period</TableHead>
                   <TableHead>City</TableHead>
-                  <TableHead>Date of Sharing</TableHead>
-                  <TableHead>Comment</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead className="min-w-[200px]">Comment</TableHead>
+                  <TableHead className="min-w-[200px]">Notes</TableHead>
                   <TableHead>Stage</TableHead>
                   {isSuperAdmin && <TableHead>Added By</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
@@ -510,17 +510,33 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                   .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                   .map((candidate) => (
                   <TableRow key={candidate.id}>
-                    <TableCell>
+                    <TableCell className="sticky left-0 z-10 bg-background">
                       <Checkbox
                         checked={selectedCandidates.has(candidate.id)}
                         onCheckedChange={(checked) => handleSelectCandidate(candidate.id, checked as boolean)}
                       />
                     </TableCell>
-                    <TableCell className="font-medium whitespace-nowrap">{candidate.full_name}</TableCell>
-                    <TableCell className="min-w-[180px]">
-                      <div className="text-sm">
-                        <div>{candidate.email}</div>
-                        <div className="text-muted-foreground">{candidate.phone}</div>
+                    <TableCell className="whitespace-nowrap sticky left-[50px] z-10 bg-background">
+                      {candidate.date_of_sharing 
+                        ? new Date(candidate.date_of_sharing).toLocaleDateString() 
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="font-medium sticky left-[150px] z-10 bg-background">
+                      <div className="whitespace-nowrap">{candidate.full_name}</div>
+                      {candidate.gender && (
+                        <div className="text-xs text-muted-foreground">{candidate.gender}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="min-w-[200px] sticky left-[280px] z-10 bg-background">
+                      <div className="text-sm space-y-1">
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">📧</span>
+                          <span className="break-all">{candidate.email}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">📱</span>
+                          <span>{candidate.phone}</span>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{candidate.position_name || "-"}</TableCell>
@@ -534,18 +550,13 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
                     <TableCell className="whitespace-nowrap">{candidate.expected_ctc || "-"}</TableCell>
                     <TableCell className="whitespace-nowrap">{candidate.notice_period || "-"}</TableCell>
                     <TableCell className="whitespace-nowrap">{candidate.city}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {candidate.date_of_sharing 
-                        ? new Date(candidate.date_of_sharing).toLocaleDateString() 
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      <div className="text-sm whitespace-normal break-words">
+                    <TableCell className="min-w-[200px] max-w-[300px]">
+                      <div className="text-sm whitespace-pre-wrap break-words">
                         {candidate.comment || "-"}
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      <div className="text-sm whitespace-normal break-words">
+                    <TableCell className="min-w-[200px] max-w-[300px]">
+                      <div className="text-sm whitespace-pre-wrap break-words">
                         {candidate.notes || "-"}
                       </div>
                     </TableCell>
