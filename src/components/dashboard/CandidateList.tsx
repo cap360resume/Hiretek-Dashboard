@@ -9,13 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Download, Edit, Trash2, FileText, Loader2, Upload } from "lucide-react";
+import { Plus, Search, Download, Edit, Trash2, FileText, Loader2, Upload, Calendar, Mail, Phone, User, Briefcase, MapPin, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import CandidateDialog from "./CandidateDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
-
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 interface Candidate {
   id: string;
   full_name: string;
@@ -526,145 +526,272 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
               : "No candidates yet. Add your first candidate to get started."}
           </div>
         ) : (
-          <div className="border rounded-lg overflow-x-auto">
-            <Table>
+          <div className="border rounded-xl overflow-x-auto shadow-sm bg-card">
+            <Table className="table-enhanced">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px] sticky left-0 z-20 bg-background">
+                <TableRow className="border-b-2 border-border bg-gradient-to-r from-muted/80 to-muted/40">
+                  <TableHead className="w-[50px] sticky left-0 z-20 bg-muted/80">
                     <Checkbox
                       checked={selectedCandidates.size === filteredCandidates.length && filteredCandidates.length > 0}
                       onCheckedChange={handleSelectAll}
+                      className="border-muted-foreground/50"
                     />
                   </TableHead>
-                  <TableHead className="sticky left-[50px] z-20 bg-background">Date of Sharing</TableHead>
-                  <TableHead className="sticky left-[150px] z-20 bg-background">Name</TableHead>
-                  <TableHead className="sticky left-[280px] z-20 bg-background min-w-[200px]">Contact</TableHead>
-                  <TableHead>Position Name</TableHead>
-                  <TableHead>Client Name</TableHead>
-                  <TableHead>Qualification</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Experience</TableHead>
-                  <TableHead>Current CTC</TableHead>
-                  <TableHead>Expected CTC</TableHead>
-                  <TableHead>Notice Period</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead className="min-w-[200px]">Comment</TableHead>
-                  <TableHead className="min-w-[200px]">Notes</TableHead>
-                  <TableHead>Stage</TableHead>
-                  {isSuperAdmin && <TableHead>Added By</TableHead>}
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="sticky left-[50px] z-20 bg-muted/80 font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-primary" />
+                      <span>Date</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="sticky left-[150px] z-20 bg-muted/80 font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-primary" />
+                      <span>Name</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="sticky left-[280px] z-20 bg-muted/80 min-w-[200px] font-semibold sticky-shadow-right">
+                    <div className="flex items-center gap-1.5">
+                      <Mail className="h-3.5 w-3.5 text-primary" />
+                      <span>Contact</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="font-semibold">Position</TableHead>
+                  <TableHead className="font-semibold">Client</TableHead>
+                  <TableHead className="font-semibold">Qualification</TableHead>
+                  <TableHead className="font-semibold">Industry</TableHead>
+                  <TableHead className="font-semibold">Designation</TableHead>
+                  <TableHead className="font-semibold">Company</TableHead>
+                  <TableHead className="font-semibold">Exp.</TableHead>
+                  <TableHead className="font-semibold">Current CTC</TableHead>
+                  <TableHead className="font-semibold">Expected CTC</TableHead>
+                  <TableHead className="font-semibold">Notice</TableHead>
+                  <TableHead className="font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-primary" />
+                      <span>City</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[200px] font-semibold">Comment</TableHead>
+                  <TableHead className="min-w-[200px] font-semibold">Notes</TableHead>
+                  <TableHead className="font-semibold">Stage</TableHead>
+                  {isSuperAdmin && <TableHead className="font-semibold">Added By</TableHead>}
+                  <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredCandidates
                   .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                   .map((candidate) => (
-                  <TableRow key={candidate.id}>
-                    <TableCell className="sticky left-0 z-10 bg-background">
+                  <TableRow key={candidate.id} className="group hover:bg-accent/40 transition-colors">
+                    <TableCell className="sticky left-0 z-10 bg-card group-hover:bg-accent/40 transition-colors">
                       <Checkbox
                         checked={selectedCandidates.has(candidate.id)}
                         onCheckedChange={(checked) => handleSelectCandidate(candidate.id, checked as boolean)}
+                        className="border-muted-foreground/50"
                       />
                     </TableCell>
-                    <TableCell className="whitespace-nowrap sticky left-[50px] z-10 bg-background">
-                      {candidate.date_of_sharing 
-                        ? new Date(candidate.date_of_sharing).toLocaleDateString() 
-                        : "-"}
+                    <TableCell className="whitespace-nowrap sticky left-[50px] z-10 bg-card group-hover:bg-accent/40 transition-colors">
+                      <span className="text-xs font-medium px-2 py-1 rounded-md bg-muted/50">
+                        {candidate.date_of_sharing 
+                          ? new Date(candidate.date_of_sharing).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
+                          : "-"}
+                      </span>
                     </TableCell>
-                    <TableCell className="font-medium sticky left-[150px] z-10 bg-background">
-                      <div className="whitespace-nowrap">{candidate.full_name}</div>
-                      {candidate.gender && (
-                        <div className="text-xs text-muted-foreground">{candidate.gender}</div>
-                      )}
+                    <TableCell className="font-medium sticky left-[150px] z-10 bg-card group-hover:bg-accent/40 transition-colors">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-foreground whitespace-nowrap">{candidate.full_name}</span>
+                        {candidate.gender && (
+                          <span className="text-xs text-muted-foreground mt-0.5 capitalize">{candidate.gender}</span>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell className="min-w-[200px] sticky left-[280px] z-10 bg-background">
-                      <div className="text-sm space-y-1">
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">📧</span>
-                          <span className="break-all">{candidate.email}</span>
+                    <TableCell className="min-w-[200px] sticky left-[280px] z-10 bg-card group-hover:bg-accent/40 transition-colors sticky-shadow-right">
+                      <div className="text-sm space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="break-all text-muted-foreground hover:text-foreground transition-colors">{candidate.email}</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">📱</span>
-                          <span>{candidate.phone}</span>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="font-medium">{candidate.phone}</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.position_name || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.client_name || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.qualification || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.industry || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.designation || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.company || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.experience || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.current_ctc || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.expected_ctc || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.notice_period || "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{candidate.city}</TableCell>
-                    <TableCell className="min-w-[200px] max-w-[300px]">
-                      <div className="text-sm whitespace-pre-wrap break-words">
-                        {candidate.comment || "-"}
+                    <TableCell className="min-w-[120px] max-w-[180px]">
+                      <span className="text-sm">{candidate.position_name || <span className="text-muted-foreground/50">—</span>}</span>
+                    </TableCell>
+                    <TableCell className="min-w-[120px] max-w-[180px]">
+                      <span className="text-sm">{candidate.client_name || <span className="text-muted-foreground/50">—</span>}</span>
+                    </TableCell>
+                    <TableCell className="min-w-[100px] max-w-[150px]">
+                      <span className="text-sm">{candidate.qualification || <span className="text-muted-foreground/50">—</span>}</span>
+                    </TableCell>
+                    <TableCell className="min-w-[100px] max-w-[150px]">
+                      {candidate.industry ? (
+                        <Badge variant="secondary" className="font-normal text-xs">{candidate.industry}</Badge>
+                      ) : <span className="text-muted-foreground/50">—</span>}
+                    </TableCell>
+                    <TableCell className="min-w-[100px] max-w-[150px]">
+                      <span className="text-sm">{candidate.designation || <span className="text-muted-foreground/50">—</span>}</span>
+                    </TableCell>
+                    <TableCell className="min-w-[100px] max-w-[150px]">
+                      {candidate.company ? (
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm">{candidate.company}</span>
+                        </div>
+                      ) : <span className="text-muted-foreground/50">—</span>}
+                    </TableCell>
+                    <TableCell className="min-w-[80px] max-w-[100px]">
+                      {candidate.experience ? (
+                        <Badge variant="outline" className="font-normal text-xs bg-primary/5">{candidate.experience}</Badge>
+                      ) : <span className="text-muted-foreground/50">—</span>}
+                    </TableCell>
+                    <TableCell className="min-w-[80px] max-w-[120px]">
+                      <span className="text-sm font-medium">{candidate.current_ctc || <span className="text-muted-foreground/50 font-normal">—</span>}</span>
+                    </TableCell>
+                    <TableCell className="min-w-[80px] max-w-[120px]">
+                      <span className="text-sm font-medium text-primary">{candidate.expected_ctc || <span className="text-muted-foreground/50 font-normal">—</span>}</span>
+                    </TableCell>
+                    <TableCell className="min-w-[80px] max-w-[120px]">
+                      {candidate.notice_period ? (
+                        <Badge variant="secondary" className="font-normal text-xs">{candidate.notice_period}</Badge>
+                      ) : <span className="text-muted-foreground/50">—</span>}
+                    </TableCell>
+                    <TableCell className="min-w-[80px] max-w-[120px]">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm">{candidate.city}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="min-w-[200px] max-w-[300px]">
-                      <div className="text-sm whitespace-pre-wrap break-words">
-                        {candidate.notes || "-"}
-                      </div>
+                    <TableCell className="min-w-[200px] max-w-[300px] align-top">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-sm whitespace-pre-wrap break-words leading-relaxed text-muted-foreground cursor-default">
+                              {candidate.comment 
+                                ? candidate.comment.length > 100 
+                                  ? candidate.comment.substring(0, 100) + "..." 
+                                  : candidate.comment 
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </div>
+                          </TooltipTrigger>
+                          {candidate.comment && candidate.comment.length > 100 && (
+                            <TooltipContent side="top" className="max-w-[300px] whitespace-pre-wrap">
+                              {candidate.comment}
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+                    <TableCell className="min-w-[200px] max-w-[300px] align-top">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-sm whitespace-pre-wrap break-words leading-relaxed text-muted-foreground cursor-default">
+                              {candidate.notes 
+                                ? candidate.notes.length > 100 
+                                  ? candidate.notes.substring(0, 100) + "..." 
+                                  : candidate.notes 
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </div>
+                          </TooltipTrigger>
+                          {candidate.notes && candidate.notes.length > 100 && (
+                            <TooltipContent side="top" className="max-w-[300px] whitespace-pre-wrap">
+                              {candidate.notes}
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={STAGE_VARIANTS[candidate.stage]}>
+                      <Badge variant="outline" className={`${STAGE_VARIANTS[candidate.stage]} font-medium shadow-sm`}>
                         {candidate.stage}
                       </Badge>
                     </TableCell>
                     {isSuperAdmin && (
-                      <TableCell className="whitespace-nowrap">
-                        <span className="text-sm text-muted-foreground">
-                          {candidate.profiles?.full_name || "Unknown"}
-                        </span>
+                      <TableCell className="min-w-[100px] max-w-[150px]">
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {candidate.profiles?.full_name || "Unknown"}
+                          </span>
+                        </div>
                       </TableCell>
                     )}
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                         {candidate.resume_url && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedResumeUrl(candidate.resume_url);
-                                setResumeDialogOpen(true);
-                              }}
-                              title="View Resume"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDownloadResume(candidate.resume_url!, candidate.full_name)}
-                              disabled={downloadingResume}
-                              title="Download Resume"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                                    onClick={() => {
+                                      setSelectedResumeUrl(candidate.resume_url);
+                                      setResumeDialogOpen(true);
+                                    }}
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>View Resume</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                                    onClick={() => handleDownloadResume(candidate.resume_url!, candidate.full_name)}
+                                    disabled={downloadingResume}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Download Resume</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => { setEditingCandidate(candidate); setDialogOpen(true); }}
-                        >
-                          <Edit className="h-4 w-4" />
-                          </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                                onClick={() => { setEditingCandidate(candidate); setDialogOpen(true); }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit Candidate</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {isSuperAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(candidate.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => handleDelete(candidate.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete Candidate</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </div>
                     </TableCell>
