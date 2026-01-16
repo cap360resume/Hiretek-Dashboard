@@ -78,7 +78,11 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [adminFilter, setAdminFilter] = useState<string>("all");
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [industryFilter, setIndustryFilter] = useState<string>("all");
   const [subAdmins, setSubAdmins] = useState<Array<{ id: string; name: string }>>([]);
+  const [companies, setCompanies] = useState<string[]>([]);
+  const [industries, setIndustries] = useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
@@ -122,7 +126,15 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
   useEffect(() => {
     filterCandidates();
     setCurrentPage(1); // Reset to first page when filters change
-  }, [candidates, searchTerm, stageFilter, adminFilter]);
+  }, [candidates, searchTerm, stageFilter, adminFilter, companyFilter, industryFilter]);
+
+  // Extract unique companies and industries from candidates
+  useEffect(() => {
+    const uniqueCompanies = [...new Set(candidates.map(c => c.company).filter(Boolean))] as string[];
+    const uniqueIndustries = [...new Set(candidates.map(c => c.industry).filter(Boolean))] as string[];
+    setCompanies(uniqueCompanies.sort());
+    setIndustries(uniqueIndustries.sort());
+  }, [candidates]);
 
   const loadCandidates = async () => {
     if (!user) return;
@@ -193,7 +205,9 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
           c.phone.includes(term) ||
           c.city.toLowerCase().includes(term) ||
           (c.position_name && c.position_name.toLowerCase().includes(term)) ||
-          (c.client_name && c.client_name.toLowerCase().includes(term))
+          (c.client_name && c.client_name.toLowerCase().includes(term)) ||
+          (c.company && c.company.toLowerCase().includes(term)) ||
+          (c.industry && c.industry.toLowerCase().includes(term))
       );
     }
 
@@ -203,6 +217,14 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
 
     if (adminFilter !== "all") {
       filtered = filtered.filter((c) => c.created_by === adminFilter);
+    }
+
+    if (companyFilter !== "all") {
+      filtered = filtered.filter((c) => c.company === companyFilter);
+    }
+
+    if (industryFilter !== "all") {
+      filtered = filtered.filter((c) => c.industry === industryFilter);
     }
 
     setFilteredCandidates(filtered);
@@ -401,44 +423,74 @@ export default function CandidateList({ isSuperAdmin }: CandidateListProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, email, phone, city, position, or client..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="Filter by stage" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stages</SelectItem>
-              {STAGES.map((stage) => (
-                <SelectItem key={stage} value={stage}>
-                  {stage}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {isSuperAdmin && (
-            <Select value={adminFilter} onValueChange={setAdminFilter}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Filter by admin" />
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, email, phone, city, position, client, company, or industry..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={stageFilter} onValueChange={setStageFilter}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Filter by stage" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Admins</SelectItem>
-                {subAdmins.map((admin) => (
-                  <SelectItem key={admin.id} value={admin.id}>
-                    {admin.name}
+                <SelectItem value="all">All Stages</SelectItem>
+                {STAGES.map((stage) => (
+                  <SelectItem key={stage} value={stage}>
+                    {stage}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filter by company" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Companies</SelectItem>
+                {companies.map((company) => (
+                  <SelectItem key={company} value={company}>
+                    {company}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={industryFilter} onValueChange={setIndustryFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filter by industry" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Industries</SelectItem>
+                {industries.map((industry) => (
+                  <SelectItem key={industry} value={industry}>
+                    {industry}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isSuperAdmin && (
+              <Select value={adminFilter} onValueChange={setAdminFilter}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Filter by admin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Admins</SelectItem>
+                  {subAdmins.map((admin) => (
+                    <SelectItem key={admin.id} value={admin.id}>
+                      {admin.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
