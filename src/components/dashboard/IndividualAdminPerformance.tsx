@@ -33,22 +33,22 @@ interface AdminStats {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  Screening: "hsl(200, 70%, 50%)",
-  Interview: "hsl(280, 60%, 55%)",
-  Offer: "hsl(140, 60%, 45%)",
-  Hired: "hsl(160, 70%, 40%)",
-  Rejected: "hsl(0, 70%, 50%)",
-  Backout: "hsl(30, 80%, 50%)",
-  "On Hold": "hsl(45, 80%, 50%)",
-  "Not Interested": "hsl(0, 40%, 55%)",
-  Duplicate: "hsl(200, 30%, 50%)",
-  "Round 1": "hsl(45, 93%, 47%)",
-  "Round 2": "hsl(120, 60%, 50%)",
-  "Round 3": "hsl(180, 60%, 45%)",
-  "CV Shared": "hsl(174, 72%, 56%)",
-  Joined: "hsl(150, 70%, 40%)",
-  "Offer Pending": "hsl(25, 95%, 53%)",
-  "CV Not Relevant": "hsl(0, 30%, 60%)",
+  Screening: "hsl(200, 40%, 85%)",
+  Interview: "hsl(280, 40%, 85%)",
+  Offer: "hsl(140, 40%, 85%)",
+  Hired: "hsl(160, 40%, 85%)",
+  Rejected: "hsl(0, 40%, 85%)",
+  Backout: "hsl(30, 40%, 85%)",
+  "On Hold": "hsl(45, 40%, 85%)",
+  "Not Interested": "hsl(0, 30%, 88%)",
+  Duplicate: "hsl(200, 30%, 88%)",
+  "Round 1": "hsl(45, 40%, 85%)",
+  "Round 2": "hsl(120, 40%, 85%)",
+  "Round 3": "hsl(180, 40%, 85%)",
+  "CV Shared": "hsl(174, 40%, 85%)",
+  Joined: "hsl(150, 40%, 85%)",
+  "Offer Pending": "hsl(25, 40%, 85%)",
+  "CV Not Relevant": "hsl(0, 25%, 88%)",
 };
 
 export default function IndividualAdminPerformance() {
