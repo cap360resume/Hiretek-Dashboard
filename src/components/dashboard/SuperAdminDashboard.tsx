@@ -4,7 +4,8 @@ import DashboardLayout from "./DashboardLayout";
 import AdminManagement from "./AdminManagement";
 import CandidateList from "./CandidateList";
 import SuperAdminStats from "./SuperAdminStats";
-import { Users, BarChart3, UserPlus } from "lucide-react";
+import IndividualAdminPerformance from "./IndividualAdminPerformance";
+import { Users, BarChart3, UserPlus, UserCog } from "lucide-react";
 
 export default function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -12,10 +13,14 @@ export default function SuperAdminDashboard() {
   return (
     <DashboardLayout title="Candidate Management System">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto">
           <TabsTrigger value="overview" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="admin-stats" className="gap-2">
+            <UserCog className="h-4 w-4" />
+            <span className="hidden sm:inline">Admin Stats</span>
           </TabsTrigger>
           <TabsTrigger value="candidates" className="gap-2">
             <Users className="h-4 w-4" />
@@ -29,6 +34,10 @@ export default function SuperAdminDashboard() {
 
         <TabsContent value="overview" className="space-y-6">
           <SuperAdminStats />
+        </TabsContent>
+
+        <TabsContent value="admin-stats" className="space-y-6">
+          <IndividualAdminPerformance />
         </TabsContent>
 
         <TabsContent value="candidates">
