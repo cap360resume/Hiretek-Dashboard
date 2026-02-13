@@ -7,17 +7,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recha
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
-const STAGE_COLORS = {
-  Screening: "hsl(var(--screening))",
-  Interview: "hsl(var(--interview))",
-  Offer: "hsl(var(--offer))",
-  Hired: "hsl(var(--hired))",
-  Rejected: "hsl(var(--rejected))",
-  "Round 1": "hsl(45, 93%, 47%)", // yellow
-  "Round 2": "hsl(120, 60%, 50%)", // green
-  "CV Shared": "hsl(174, 72%, 56%)", // sea green
-  "Offer Pending": "hsl(25, 95%, 53%)", // orange
-};
+import { STAGE_COLORS } from "@/lib/pipeline-config";
 
 export default function SubAdminStats() {
   const { user } = useAuth();
@@ -238,10 +228,10 @@ export default function SubAdminStats() {
                     <Cell key={`cell-${index}`} fill={STAGE_COLORS[entry.name as keyof typeof STAGE_COLORS]} />
                   ))}
                 </Pie>
-                 <Tooltip />
-                  <Legend 
-                   formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
-                   />
+                <Tooltip />
+                <Legend 
+                  formatter={(value, entry: any) => `${value} → ${entry.payload.value}`}
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (

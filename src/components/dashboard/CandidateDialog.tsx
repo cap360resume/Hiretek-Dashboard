@@ -11,8 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, X } from "lucide-react";
 import { z } from "zod";
-
-const STAGES = ["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3", "CV Shared", "Joined", "Offer Pending", "CV Not Relevant"];
+import { ALL_STAGES, PIPELINE_GROUPS } from "@/lib/pipeline-config";
 
 const candidateSchema = z.object({
   full_name: z.string().trim().min(1, "Name is required").max(100, "Name too long"),
@@ -20,7 +19,7 @@ const candidateSchema = z.object({
   phone: z.string().trim().min(1, "Phone is required").max(20, "Phone too long"),
   gender: z.string().optional(),
   city: z.string().trim().min(1, "City is required").max(100, "City too long"),
-  stage: z.enum(["Screening", "Interview", "Offer", "Hired", "Rejected", "Backout", "On Hold", "Not Interested", "Duplicate", "Round 1", "Round 2", "Round 3", "CV Shared", "Joined", "Offer Pending", "CV Not Relevant"]),
+  stage: z.string().refine((val) => ALL_STAGES.includes(val), "Invalid stage"),
   notes: z.string().max(1000, "Notes too long").optional(),
   designation: z.string().max(100, "Designation too long").optional(),
   company: z.string().max(100, "Company too long").optional(),
@@ -220,12 +219,21 @@ export default function CandidateDialog({
         }
       }
 
-      // Check for duplicate email
-      const { data: emailDuplicates } = await supabase
+      // Check for duplicate email - only for new candidates or when email is changed
+      console.log("Candidate ID for duplicate check:", candidate?.id, "Full candidate:", candidate);
+      
+      let emailQuery = supabase
         .from("candidates")
         .select("id, full_name, email")
-        .eq("email", validatedData.email)
-        .neq("id", candidate?.id || "");
+        .eq("email", validatedData.email);
+      
+      if (candidate?.id) {
+        console.log("Excluding candidate ID from duplicate check:", candidate.id);
+        emailQuery = emailQuery.neq("id", candidate.id);
+      }
+      
+      const { data: emailDuplicates } = await emailQuery;
+      console.log("Email duplicates found:", emailDuplicates);
       
       if (emailDuplicates && emailDuplicates.length > 0) {
         const duplicate = emailDuplicates[0];
@@ -234,12 +242,17 @@ export default function CandidateDialog({
         return;
       }
 
-      // Check for duplicate phone
-      const { data: phoneDuplicates } = await supabase
+      // Check for duplicate phone - only for new candidates or when phone is changed
+      let phoneQuery = supabase
         .from("candidates")
         .select("id, full_name, phone")
-        .eq("phone", validatedData.phone)
-        .neq("id", candidate?.id || "");
+        .eq("phone", validatedData.phone);
+      
+      if (candidate?.id) {
+        phoneQuery = phoneQuery.neq("id", candidate.id);
+      }
+      
+      const { data: phoneDuplicates } = await phoneQuery;
       
       if (phoneDuplicates && phoneDuplicates.length > 0) {
         const duplicate = phoneDuplicates[0];
@@ -254,7 +267,7 @@ export default function CandidateDialog({
         phone: validatedData.phone,
         gender: validatedData.gender,
         city: validatedData.city,
-        stage: validatedData.stage,
+        stage: validatedData.stage as any,
         notes: validatedData.notes,
         designation: validatedData.designation,
         company: validatedData.company,
@@ -389,11 +402,29 @@ export default function CandidateDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STAGES.map((stage) => (
-                    <SelectItem key={stage} value={stage}>
-                      {stage}
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const seen = new Set<string>();
+                    return PIPELINE_GROUPS.map((group) => {
+                      const uniqueStages = group.stages.filter((stage) => {
+                        if (seen.has(stage)) return false;
+                        seen.add(stage);
+                        return true;
+                      });
+                      if (uniqueStages.length === 0) return null;
+                      return (
+                        <div key={group.label}>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
+                            {group.emoji} {group.label}
+                          </div>
+                          {uniqueStages.map((stage) => (
+                            <SelectItem key={stage} value={stage} className="pl-6">
+                              {stage}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      );
+                    });
+                  })()}
                 </SelectContent>
               </Select>
             </div>
