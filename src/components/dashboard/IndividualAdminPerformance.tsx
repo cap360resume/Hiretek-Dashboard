@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { 
   Users, TrendingUp, Clock, Calendar, Target, Award, 
   UserCircle, BarChart3, Activity, Zap, Mail, Phone,
-  ChevronRight, Sparkles, PieChart as PieChartIcon, History, MessageSquare, Loader2
+  ChevronRight, Sparkles, PieChart as PieChartIcon, History, MessageSquare, Loader2, X
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 import { format, subDays, startOfMonth, eachDayOfInterval, startOfWeek } from "date-fns";
@@ -28,8 +28,11 @@ interface Admin {
 
 import { STAGE_COLORS, ACTIVE_PIPELINE_STAGES, PIPELINE_GROUPS } from "@/lib/pipeline-config";
 
-// Key stages to highlight - candidates in active/important stages
-const KEY_STAGES = ACTIVE_PIPELINE_STAGES;
+// Key stages to highlight - only Interview process and Offer stages
+const KEY_STAGES = [
+  "Interview Scheduled", "Interview", "Round 1", "Round 2", "Round 3", "Selected",
+  "Offer Discussion", "Offer Pending Approval", "Offer Pending", "Offer Released", "Offer", "Offer Accepted",
+];
 
 interface ActiveCandidate {
   id: string;
@@ -228,40 +231,53 @@ export default function IndividualAdminPerformance() {
   };
 
   const handleStageChange = async () => {
-    if (!stageDialogCandidate || !user || newStage === stageDialogCandidate.stage) return;
+    if (!stageDialogCandidate || !user) return;
+    const stageChanged = newStage !== stageDialogCandidate.stage;
+    if (!stageChanged && !stageComment.trim()) return;
     setSavingStage(true);
     try {
-      // Update candidate stage
-      const { error: updateError } = await supabase
-        .from("candidates")
-        .update({ stage: newStage as any })
-        .eq("id", stageDialogCandidate.id);
+      if (stageChanged) {
+        const { error: updateError } = await supabase
+          .from("candidates")
+          .update({ stage: newStage as any })
+          .eq("id", stageDialogCandidate.id);
+        if (updateError) throw updateError;
+      }
 
-      if (updateError) throw updateError;
-
-      // Insert stage history
+      // Insert stage history (for stage change or comment-only)
       const { error: historyError } = await supabase
         .from("stage_history")
         .insert({
           candidate_id: stageDialogCandidate.id,
           old_stage: stageDialogCandidate.stage,
-          new_stage: newStage,
+          new_stage: stageChanged ? newStage : stageDialogCandidate.stage,
           changed_by: user.id,
           comment: stageComment || null,
         });
 
       if (historyError) throw historyError;
 
-      toast.success(`Stage changed to ${newStage}`);
+      toast.success(stageChanged ? `Stage changed to ${newStage}` : "Comment added");
       setStageDialogOpen(false);
       setStageDialogCandidate(null);
-      // Reload stats
       if (selectedAdmin) loadAdminStats(selectedAdmin);
     } catch (error) {
-      console.error("Error changing stage:", error);
-      toast.error("Failed to change stage");
+      console.error("Error:", error);
+      toast.error("Failed to save");
     } finally {
       setSavingStage(false);
+    }
+  };
+
+  const handleDeleteHistory = async (historyId: string) => {
+    try {
+      const { error } = await supabase.from("stage_history").delete().eq("id", historyId);
+      if (error) throw error;
+      setStageHistory((prev) => prev.filter((h) => h.id !== historyId));
+      toast.success("History entry deleted");
+    } catch (error) {
+      console.error("Error deleting history:", error);
+      toast.error("Failed to delete");
     }
   };
 
@@ -555,7 +571,7 @@ export default function IndividualAdminPerformance() {
                   </div>
                   <div>
                     <CardTitle className="text-lg">Active Pipeline</CardTitle>
-                    <CardDescription>Candidates in Interview, Round 1/2/3, Offer stages</CardDescription>
+                    <CardDescription>Candidates in Interview & Offer process only</CardDescription>
                   </div>
                 </div>
                 <Badge variant="secondary" className="text-sm font-semibold w-fit">
@@ -721,11 +737,15 @@ export default function IndividualAdminPerformance() {
             {/* Save Button */}
             <Button
               onClick={handleStageChange}
-              disabled={savingStage || newStage === stageDialogCandidate?.stage}
+              disabled={savingStage || (newStage === stageDialogCandidate?.stage && !stageComment.trim())}
               className="w-full"
             >
               {savingStage && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {newStage === stageDialogCandidate?.stage ? "Select a different stage" : `Change to ${newStage}`}
+              {newStage !== stageDialogCandidate?.stage
+                ? `Change to ${newStage}`
+                : stageComment.trim()
+                  ? "Add Comment"
+                  : "Enter a comment or change stage"}
             </Button>
 
             {/* Stage History */}
@@ -745,22 +765,38 @@ export default function IndividualAdminPerformance() {
                       <div key={entry.id} className="p-3 rounded-lg border bg-muted/30 text-sm space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge variant="outline" className="text-[10px]">{entry.old_stage}</Badge>
-                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                            <Badge
-                              className="text-[10px]"
-                              style={{
-                                backgroundColor: `${STAGE_COLORS[entry.new_stage]}20`,
-                                color: STAGE_COLORS[entry.new_stage],
-                                border: `1px solid ${STAGE_COLORS[entry.new_stage]}40`,
-                              }}
-                            >
-                              {entry.new_stage}
-                            </Badge>
+                            {entry.old_stage !== entry.new_stage ? (
+                              <>
+                                <Badge variant="outline" className="text-[10px]">{entry.old_stage}</Badge>
+                                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                <Badge
+                                  className="text-[10px]"
+                                  style={{
+                                    backgroundColor: `${STAGE_COLORS[entry.new_stage]}20`,
+                                    color: STAGE_COLORS[entry.new_stage],
+                                    border: `1px solid ${STAGE_COLORS[entry.new_stage]}40`,
+                                  }}
+                                >
+                                  {entry.new_stage}
+                                </Badge>
+                              </>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px]">💬 Comment added</Badge>
+                            )}
                           </div>
-                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                            {format(new Date(entry.created_at), "MMM dd, hh:mm a")}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {format(new Date(entry.created_at), "MMM dd, hh:mm a")}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteHistory(entry.id)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <UserCircle className="h-3 w-3" />

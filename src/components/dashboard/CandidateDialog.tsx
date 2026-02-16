@@ -8,10 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, History, ChevronRight, UserCircle, MessageSquare, Trash2 } from "lucide-react";
 import { z } from "zod";
-import { ALL_STAGES, PIPELINE_GROUPS } from "@/lib/pipeline-config";
+import { ALL_STAGES, PIPELINE_GROUPS, STAGE_COLORS } from "@/lib/pipeline-config";
+import { format } from "date-fns";
 
 const candidateSchema = z.object({
   full_name: z.string().trim().min(1, "Name is required").max(100, "Name too long"),
@@ -51,6 +54,16 @@ export default function CandidateDialog({
   const [loading, setLoading] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [stageHistory, setStageHistory] = useState<Array<{
+    id: string;
+    old_stage: string;
+    new_stage: string;
+    changed_by: string;
+    comment: string | null;
+    created_at: string;
+    changer_name?: string;
+  }>>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -93,6 +106,62 @@ export default function CandidateDialog({
       }
     }
   }, [open, candidate]);
+
+  // Load stage history when editing a candidate
+  useEffect(() => {
+    if (open && candidate?.id) {
+      loadStageHistory(candidate.id);
+    } else {
+      setStageHistory([]);
+    }
+  }, [open, candidate?.id]);
+
+  const loadStageHistory = async (candidateId: string) => {
+    setHistoryLoading(true);
+    try {
+      const { data: history } = await supabase
+        .from("stage_history")
+        .select("*")
+        .eq("candidate_id", candidateId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (history && history.length > 0) {
+        const changerIds = [...new Set(history.map((h) => h.changed_by))];
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", changerIds);
+
+        const nameMap: Record<string, string> = {};
+        profiles?.forEach((p) => { nameMap[p.id] = p.full_name; });
+
+        setStageHistory(history.map((h) => ({
+          ...h,
+          changer_name: nameMap[h.changed_by] || "Unknown",
+        })));
+      } else {
+        setStageHistory([]);
+      }
+    } catch (error) {
+      console.error("Error loading stage history:", error);
+      setStageHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleDeleteHistory = async (historyId: string) => {
+    try {
+      const { error } = await supabase.from("stage_history").delete().eq("id", historyId);
+      if (error) throw error;
+      setStageHistory((prev) => prev.filter((h) => h.id !== historyId));
+      toast.success("History entry deleted");
+    } catch (error) {
+      console.error("Error deleting history:", error);
+      toast.error("Failed to delete");
+    }
+  };
 
   useEffect(() => {
     if (candidate) {
@@ -286,12 +355,25 @@ export default function CandidateDialog({
       };
 
       if (candidate) {
+        const oldStage = candidate.stage;
         const { error } = await supabase
           .from("candidates")
           .update(candidateData)
           .eq("id", candidate.id);
 
         if (error) throw error;
+
+        // Log stage change if stage was modified
+        if (oldStage !== validatedData.stage) {
+          await supabase.from("stage_history").insert({
+            candidate_id: candidate.id,
+            old_stage: oldStage,
+            new_stage: validatedData.stage,
+            changed_by: user.id,
+            comment: validatedData.comment || null,
+          });
+        }
+
         toast.success("Candidate updated successfully");
       } else {
         const { error } = await supabase.from("candidates").insert([candidateData]);
@@ -595,6 +677,76 @@ export default function CandidateDialog({
               maxLength={1000}
             />
           </div>
+
+          {/* Stage History */}
+          {candidate && (
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-semibold">Stage Change History</Label>
+              </div>
+              {historyLoading ? (
+                <p className="text-xs text-muted-foreground text-center py-3">Loading history...</p>
+              ) : stageHistory.length > 0 ? (
+                <ScrollArea className="max-h-[200px]">
+                  <div className="space-y-2 pr-2">
+                    {stageHistory.map((entry) => (
+                      <div key={entry.id} className="p-3 rounded-lg border bg-muted/30 text-sm space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {entry.old_stage !== entry.new_stage ? (
+                              <>
+                                <Badge variant="outline" className="text-[10px]">{entry.old_stage}</Badge>
+                                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                <Badge
+                                  className="text-[10px]"
+                                  style={{
+                                    backgroundColor: `${STAGE_COLORS[entry.new_stage]}20`,
+                                    color: STAGE_COLORS[entry.new_stage],
+                                    border: `1px solid ${STAGE_COLORS[entry.new_stage]}40`,
+                                  }}
+                                >
+                                  {entry.new_stage}
+                                </Badge>
+                              </>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px]">💬 Comment added</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {format(new Date(entry.created_at), "MMM dd, hh:mm a")}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteHistory(entry.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <UserCircle className="h-3 w-3" />
+                          by {entry.changer_name}
+                        </p>
+                        {entry.comment && (
+                          <p className="text-xs flex items-start gap-1 text-foreground/80">
+                            <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
+                            {entry.comment}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-3">No stage changes recorded yet</p>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={handleCloseAttempt}>

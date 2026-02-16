@@ -1,13 +1,28 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, UserCheck, Clock, ArrowUpRight, ArrowDownRight, Trophy } from "lucide-react";
+import { Users, TrendingUp, UserCheck, Clock, ArrowUpRight, ArrowDownRight, Trophy, Mail, Phone, Building, MapPin, Loader2 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { STAGE_COLORS } from "@/lib/pipeline-config";
+
+interface StageCandidate {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  city: string;
+  company: string | null;
+  designation: string | null;
+  created_by: string;
+  created_at: string;
+  admin_name?: string;
+}
 
 export default function SuperAdminStats() {
   const [loading, setLoading] = useState(true);
@@ -25,6 +40,12 @@ export default function SuperAdminStats() {
   });
   const [stageData, setStageData] = useState<Array<{ name: string; value: number }>>([]);
   const [adminPerformance, setAdminPerformance] = useState<Array<{ name: string; candidates: number }>>([]);
+
+  // Stage candidates dialog
+  const [stageCandidatesOpen, setStageCandidatesOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState("");
+  const [stageCandidates, setStageCandidates] = useState<StageCandidate[]>([]);
+  const [stageCandidatesLoading, setStageCandidatesLoading] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -115,15 +136,29 @@ export default function SuperAdminStats() {
         thisWeek: calculateGrowth(thisWeek || 0, prevWeek || 0),
       });
 
-      // Stage distribution
-      const { data: candidates } = await supabase
-        .from("candidates")
-        .select("stage");
+      // Stage distribution - fetch all stages using pagination to avoid 1000 row limit
+      const allStages: string[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data: batch } = await supabase
+          .from("candidates")
+          .select("stage")
+          .range(from, from + batchSize - 1);
+        if (batch && batch.length > 0) {
+          batch.forEach((c) => allStages.push(c.stage));
+          from += batchSize;
+          hasMore = batch.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
 
-      if (candidates) {
+      if (allStages.length > 0) {
         const stageCounts: Record<string, number> = {};
-        candidates.forEach((c) => {
-          stageCounts[c.stage] = (stageCounts[c.stage] || 0) + 1;
+        allStages.forEach((stage) => {
+          stageCounts[stage] = (stageCounts[stage] || 0) + 1;
         });
 
         setStageData(
@@ -171,6 +206,43 @@ export default function SuperAdminStats() {
       console.error("Error loading stats:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openStageCandidates = async (stageName: string) => {
+    setSelectedStage(stageName);
+    setStageCandidatesOpen(true);
+    setStageCandidatesLoading(true);
+    try {
+      const { data: candidates } = await supabase
+        .from("candidates")
+        .select("id, full_name, email, phone, city, company, designation, created_by, created_at")
+        .eq("stage", stageName as any)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (candidates && candidates.length > 0) {
+        const creatorIds = [...new Set(candidates.map((c) => c.created_by))];
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", creatorIds);
+
+        const nameMap: Record<string, string> = {};
+        profiles?.forEach((p) => { nameMap[p.id] = p.full_name; });
+
+        setStageCandidates(candidates.map((c) => ({
+          ...c,
+          admin_name: nameMap[c.created_by] || "Unknown",
+        })));
+      } else {
+        setStageCandidates([]);
+      }
+    } catch (error) {
+      console.error("Error loading stage candidates:", error);
+      setStageCandidates([]);
+    } finally {
+      setStageCandidatesLoading(false);
     }
   };
 
@@ -296,7 +368,11 @@ export default function SuperAdminStats() {
                   const color = STAGE_COLORS[stage.name] || "hsl(var(--primary))";
                   
                   return (
-                    <div key={stage.name} className="space-y-1.5">
+                    <div 
+                      key={stage.name} 
+                      className="space-y-1.5 cursor-pointer rounded-lg p-2 -mx-2 hover:bg-muted/50 transition-colors"
+                      onClick={() => openStageCandidates(stage.name)}
+                    >
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
                           <div 
@@ -372,6 +448,55 @@ export default function SuperAdminStats() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Stage Candidates Dialog */}
+      <Dialog open={stageCandidatesOpen} onOpenChange={setStageCandidatesOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div 
+                className="h-3 w-3 rounded-full" 
+                style={{ backgroundColor: STAGE_COLORS[selectedStage] || "hsl(var(--primary))" }}
+              />
+              {selectedStage} Candidates
+            </DialogTitle>
+            <DialogDescription>
+              {stageCandidates.length} candidate{stageCandidates.length !== 1 ? "s" : ""} in this stage
+            </DialogDescription>
+          </DialogHeader>
+          {stageCandidatesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : stageCandidates.length > 0 ? (
+            <ScrollArea className="max-h-[60vh]">
+              <div className="space-y-2 pr-2">
+                {stageCandidates.map((c) => (
+                  <div key={c.id} className="p-3 rounded-lg border bg-muted/30 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm">{c.full_name}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        by {c.admin_name}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3 shrink-0" />{c.email}</span>
+                      <span className="flex items-center gap-1"><Phone className="h-3 w-3 shrink-0" />{c.phone}</span>
+                      <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{c.city}</span>
+                      {c.company && <span className="flex items-center gap-1 truncate"><Building className="h-3 w-3 shrink-0" />{c.company}</span>}
+                    </div>
+                    {c.designation && (
+                      <p className="text-xs text-muted-foreground">{c.designation}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No candidates found</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
