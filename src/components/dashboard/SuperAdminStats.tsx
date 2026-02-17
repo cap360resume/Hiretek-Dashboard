@@ -1,15 +1,29 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, UserCheck, Clock, ArrowUpRight, ArrowDownRight, Trophy, Mail, Phone, Building, MapPin, Loader2 } from "lucide-react";
+import { Users, TrendingUp, UserCheck, Clock, ArrowUpRight, ArrowDownRight, Trophy, Mail, Phone, Building, MapPin, Loader2, ChevronDown, ChevronUp, Download, Calendar } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format } from "date-fns";
+import * as XLSX from "xlsx";
 
 import { STAGE_COLORS } from "@/lib/pipeline-config";
+
+interface StageHistory {
+  id: string;
+  old_stage: string;
+  new_stage: string;
+  comment: string | null;
+  created_at: string;
+  changed_by: string;
+  admin_name?: string;
+}
 
 interface StageCandidate {
   id: string;
@@ -22,6 +36,8 @@ interface StageCandidate {
   created_by: string;
   created_at: string;
   admin_name?: string;
+  history?: StageHistory[];
+  showTimeline?: boolean;
 }
 
 export default function SuperAdminStats() {
@@ -46,6 +62,7 @@ export default function SuperAdminStats() {
   const [selectedStage, setSelectedStage] = useState("");
   const [stageCandidates, setStageCandidates] = useState<StageCandidate[]>([]);
   const [stageCandidatesLoading, setStageCandidatesLoading] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   useEffect(() => {
     loadStats();
@@ -213,27 +230,47 @@ export default function SuperAdminStats() {
     setSelectedStage(stageName);
     setStageCandidatesOpen(true);
     setStageCandidatesLoading(true);
+    setSelectedMonth("all");
     try {
       const { data: candidates } = await supabase
         .from("candidates")
         .select("id, full_name, email, phone, city, company, designation, created_by, created_at")
         .eq("stage", stageName as any)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (candidates && candidates.length > 0) {
         const creatorIds = [...new Set(candidates.map((c) => c.created_by))];
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", creatorIds);
+        const candidateIds = candidates.map((c) => c.id);
+
+        // Fetch profiles and stage history in parallel
+        const [profilesRes, historyRes] = await Promise.all([
+          supabase.from("profiles").select("id, full_name").in("id", creatorIds),
+          supabase.from("stage_history").select("id, candidate_id, old_stage, new_stage, comment, created_at, changed_by").in("candidate_id", candidateIds).order("created_at", { ascending: true }),
+        ]);
 
         const nameMap: Record<string, string> = {};
-        profiles?.forEach((p) => { nameMap[p.id] = p.full_name; });
+        profilesRes.data?.forEach((p) => { nameMap[p.id] = p.full_name; });
+
+        // Also resolve admin names from history changed_by
+        const historyAdminIds = [...new Set(historyRes.data?.map((h) => h.changed_by) || [])];
+        const missingIds = historyAdminIds.filter((id) => !nameMap[id]);
+        if (missingIds.length > 0) {
+          const { data: extraProfiles } = await supabase.from("profiles").select("id, full_name").in("id", missingIds);
+          extraProfiles?.forEach((p) => { nameMap[p.id] = p.full_name; });
+        }
+
+        const historyMap: Record<string, StageHistory[]> = {};
+        historyRes.data?.forEach((h) => {
+          if (!historyMap[h.candidate_id]) historyMap[h.candidate_id] = [];
+          historyMap[h.candidate_id].push({ ...h, admin_name: nameMap[h.changed_by] || "Unknown" });
+        });
 
         setStageCandidates(candidates.map((c) => ({
           ...c,
           admin_name: nameMap[c.created_by] || "Unknown",
+          history: historyMap[c.id] || [],
+          showTimeline: false,
         })));
       } else {
         setStageCandidates([]);
@@ -244,6 +281,51 @@ export default function SuperAdminStats() {
     } finally {
       setStageCandidatesLoading(false);
     }
+  };
+
+  const toggleTimeline = (candidateId: string) => {
+    setStageCandidates((prev) =>
+      prev.map((c) => c.id === candidateId ? { ...c, showTimeline: !c.showTimeline } : c)
+    );
+  };
+
+  const getMonthOptions = () => {
+    const months = new Set<string>();
+    stageCandidates.forEach((c) => {
+      months.add(format(new Date(c.created_at), "yyyy-MM"));
+    });
+    return Array.from(months).sort().reverse();
+  };
+
+  const filteredCandidates = selectedMonth === "all"
+    ? stageCandidates
+    : stageCandidates.filter((c) => format(new Date(c.created_at), "yyyy-MM") === selectedMonth);
+
+  const downloadReport = () => {
+    const rows = filteredCandidates.map((c) => {
+      const timeline = (c.history || []).map((h) =>
+        `${format(new Date(h.created_at), "dd-MMM-yy HH:mm")}: ${h.old_stage} → ${h.new_stage}${h.comment ? ` (${h.comment})` : ""} by ${h.admin_name}`
+      ).join(" | ");
+
+      return {
+        "Name": c.full_name,
+        "Email": c.email,
+        "Phone": c.phone,
+        "City": c.city,
+        "Company": c.company || "",
+        "Designation": c.designation || "",
+        "Admin": c.admin_name || "",
+        "Added On": format(new Date(c.created_at), "dd-MMM-yyyy"),
+        "Current Stage": selectedStage,
+        "Stage Timeline": timeline,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Candidates");
+    const monthLabel = selectedMonth === "all" ? "All" : selectedMonth;
+    XLSX.writeFile(wb, `${selectedStage}_${monthLabel}_Report.xlsx`);
   };
 
   const totalStageCount = stageData.reduce((acc, item) => acc + item.value, 0);
@@ -461,32 +543,116 @@ export default function SuperAdminStats() {
               {selectedStage} Candidates
             </DialogTitle>
             <DialogDescription>
-              {stageCandidates.length} candidate{stageCandidates.length !== 1 ? "s" : ""} in this stage
+              {filteredCandidates.length} candidate{filteredCandidates.length !== 1 ? "s" : ""} in this stage
             </DialogDescription>
           </DialogHeader>
+
+          {/* Month filter + Download */}
+          {!stageCandidatesLoading && stageCandidates.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <Calendar className="h-3 w-3 mr-1" />
+                  <SelectValue placeholder="Filter by month" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Months</SelectItem>
+                  {getMonthOptions().map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {format(new Date(m + "-01"), "MMM yyyy")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1 ml-auto" onClick={downloadReport}>
+                <Download className="h-3 w-3" />
+                Download Report
+              </Button>
+            </div>
+          )}
+
           {stageCandidatesLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : stageCandidates.length > 0 ? (
-            <ScrollArea className="max-h-[60vh]">
+          ) : filteredCandidates.length > 0 ? (
+            <ScrollArea className="max-h-[55vh]">
               <div className="space-y-2 pr-2">
-                {stageCandidates.map((c) => (
-                  <div key={c.id} className="p-3 rounded-lg border bg-muted/30 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm">{c.full_name}</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        by {c.admin_name}
-                      </Badge>
+                {filteredCandidates.map((c) => (
+                  <div key={c.id} className="rounded-lg border bg-muted/30 overflow-hidden">
+                    <div className="p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm">{c.full_name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className="text-[10px]">
+                            by {c.admin_name}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">
+                            Added {format(new Date(c.created_at), "dd MMM yy")}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3 shrink-0" />{c.email}</span>
+                        <span className="flex items-center gap-1"><Phone className="h-3 w-3 shrink-0" />{c.phone}</span>
+                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{c.city}</span>
+                        {c.company && <span className="flex items-center gap-1 truncate"><Building className="h-3 w-3 shrink-0" />{c.company}</span>}
+                      </div>
+                      {c.designation && (
+                        <p className="text-xs text-muted-foreground">{c.designation}</p>
+                      )}
+                      {/* Timeline toggle */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] px-2 gap-1 mt-1"
+                        onClick={() => toggleTimeline(c.id)}
+                      >
+                        {c.showTimeline ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        {c.showTimeline ? "Hide" : "Show"} Timeline ({(c.history || []).length})
+                      </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3 shrink-0" />{c.email}</span>
-                      <span className="flex items-center gap-1"><Phone className="h-3 w-3 shrink-0" />{c.phone}</span>
-                      <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{c.city}</span>
-                      {c.company && <span className="flex items-center gap-1 truncate"><Building className="h-3 w-3 shrink-0" />{c.company}</span>}
-                    </div>
-                    {c.designation && (
-                      <p className="text-xs text-muted-foreground">{c.designation}</p>
+
+                    {/* Stage History Timeline */}
+                    {c.showTimeline && (
+                      <div className="border-t bg-background/50 px-3 py-2">
+                        {(c.history || []).length > 0 ? (
+                          <div className="relative pl-4 space-y-2">
+                            <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border" />
+                            {/* Created entry */}
+                            <div className="relative flex items-start gap-2">
+                              <div className="absolute left-[-13px] top-1 h-2 w-2 rounded-full bg-primary" />
+                              <div className="text-[10px]">
+                                <span className="text-muted-foreground">{format(new Date(c.created_at), "dd MMM yy, HH:mm")}</span>
+                                <span className="ml-1 font-medium">Candidate Added</span>
+                                <span className="ml-1 text-muted-foreground">by {c.admin_name}</span>
+                              </div>
+                            </div>
+                            {(c.history || []).map((h) => {
+                              const isCommentOnly = h.old_stage === h.new_stage;
+                              return (
+                                <div key={h.id} className="relative flex items-start gap-2">
+                                  <div className="absolute left-[-13px] top-1 h-2 w-2 rounded-full bg-muted-foreground/50" />
+                                  <div className="text-[10px]">
+                                    <span className="text-muted-foreground">{format(new Date(h.created_at), "dd MMM yy, HH:mm")}</span>
+                                    {isCommentOnly ? (
+                                      <span className="ml-1">💬 Comment added</span>
+                                    ) : (
+                                      <span className="ml-1">{h.old_stage} → <span className="font-medium">{h.new_stage}</span></span>
+                                    )}
+                                    <span className="ml-1 text-muted-foreground">by {h.admin_name}</span>
+                                    {h.comment && (
+                                      <p className="text-muted-foreground italic mt-0.5">"{h.comment}"</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground text-center py-1">No stage changes recorded</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
